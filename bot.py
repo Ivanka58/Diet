@@ -10,140 +10,141 @@ import threading
 
 load_dotenv()
 
+# Настройки из ENV
 TOKEN = os.getenv("TG_TOKEN")
-PAYMENT_TOKEN = os.getenv("PAYMENT_TOKEN") # Получается в BotFather
+ADMIN_ID = os.getenv("ADMIN_ID")
+PAY_PHONE = os.getenv("PAYMENT_PHONE")
+
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
+user_steps = {} # Для временного хранения данных регистрации
 
-# Хранилище для регистрации
-user_form = {}
-
-# --- СЕРВЕР ДЛЯ RENDER ---
 @app.route('/')
-def health(): return "Ready", 200
+def health(): return "STEEL CORE ALIVE", 200
 
-def run_flask():
-    bot_port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=bot_port)
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+def check_gap(t1, t2):
+    try:
+        fmt = '%H:%M'
+        diff = datetime.strptime(t2, fmt) - datetime.strptime(t1, fmt)
+        return diff.total_seconds() / 3600 >= 4
+    except: return True
 
-# --- ЛОГИКА ПРОВЕРКИ ВРЕМЕНИ ---
-def check_time_gap(t1, t2):
-    fmt = '%H:%M'
-    dt1 = datetime.strptime(t1, fmt)
-    dt2 = datetime.strptime(t2, fmt)
-    return abs((dt2 - dt1).total_seconds()) / 3600 >= 4
-
-# --- ПРИВЕТСТВИЕ ---
+# --- КОМАНДЫ ---
 @bot.message_handler(commands=['start'])
 def start(message):
-    cid = message.chat.id
     db.init_db()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Начать путь 🚀")
-    bot.send_message(cid, 
-        f"Добро пожаловать в систему трансформации тела и духа.\n\n"
-        f"Этот бот — твой персональный надзиратель и наставник. "
-        f"Я буду следить за каждым твоим приемом пищи и тренировкой. "
-        f"Слабые уходят, сильные меняются.\n\n"
-        f"Готов начать?", reply_markup=markup)
+    bot.send_message(message.chat.id, 
+        "Привет. Ты зашел в **STEEL CORE**. Это система для тех, кто готов созидать себя и выходить из толпы.\n\n"
+        "Я буду контролировать твое питание и тренировки. Правила жесткие. Готов?", 
+        parse_mode="Markdown", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "Начать путь 🚀")
-def ask_goal(message):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("Похудение", callback_data="goal_diet"))
-    markup.add(types.InlineKeyboardButton("Поддержание формы", callback_data="goal_norm"))
-    markup.add(types.InlineKeyboardButton("Набор мышц", callback_data="goal_mass"))
-    bot.send_message(message.chat.id, "Выбери свою цель:", reply_markup=markup)
+def registration(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("Похудение", "Набор массы", "Поддержание")
+    bot.send_message(message.chat.id, "Выбери цель:", reply_markup=markup)
+    bot.register_next_step_handler(message, process_goal)
 
-# --- СБОР ДАННЫХ (FSM) ---
-@bot.callback_query_handler(func=lambda call: call.data.startswith('goal_'))
-def set_goal(call):
-    user_form[call.message.chat.id] = {'goal': call.data}
-    bot.send_message(call.message.chat.id, "Введите ваш возраст:")
-    bot.register_next_step_handler(call.message, get_age)
+def process_goal(message):
+    user_steps[message.chat.id] = {'goal': message.text}
+    bot.send_message(message.chat.id, "Твой возраст:", reply_markup=types.ReplyKeyboardRemove())
+    bot.register_next_step_handler(message, process_age)
 
-def get_age(message):
-    user_form[message.chat.id]['age'] = message.text
-    bot.send_message(message.chat.id, "Ваш текущий вес (кг):")
-    bot.register_next_step_handler(message, get_weight)
+def process_age(message):
+    user_steps[message.chat.id]['age'] = message.text
+    bot.send_message(message.chat.id, "Твой текущий вес (кг):")
+    bot.register_next_step_handler(message, process_weight)
 
-def get_weight(message):
-    user_form[message.chat.id]['weight'] = message.text
-    bot.send_message(message.chat.id, "Введите желаемое время завтрака (например, 08:00):")
-    bot.register_next_step_handler(message, get_breakfast)
+def process_weight(message):
+    user_steps[message.chat.id]['weight'] = message.text
+    bot.send_message(message.chat.id, "Время завтрака (08:00):")
+    bot.register_next_step_handler(message, process_breakfast)
 
-def get_breakfast(message):
-    user_form[message.chat.id]['breakfast'] = message.text
-    bot.send_message(message.chat.id, "Введите время обеда (не менее 4ч после завтрака):")
-    bot.register_next_step_handler(message, get_lunch)
+def process_breakfast(message):
+    user_steps[message.chat.id]['b'] = message.text
+    bot.send_message(message.chat.id, "Время обеда (не менее 4ч после завтрака):")
+    bot.register_next_step_handler(message, process_lunch)
 
-def get_lunch(message):
-    b_time = user_form[message.chat.id]['breakfast']
+def process_lunch(message):
     l_time = message.text
-    if not check_time_gap(b_time, l_time):
-        bot.send_message(message.chat.id, "⚠️ Между приемами пищи должно быть > 4 часов. Но если настаиваешь...")
-    
-    user_form[message.chat.id]['lunch'] = l_time
-    bot.send_message(message.chat.id, "Введите время ужина:")
-    bot.register_next_step_handler(message, get_dinner)
+    b_time = user_steps[message.chat.id]['b']
+    if not check_gap(b_time, l_time):
+        bot.send_message(message.chat.id, "⚠️ Между завтраком и обедом меньше 4 часов. Не рекомендую, но ты хозяин.")
+    user_steps[message.chat.id]['l'] = l_time
+    bot.send_message(message.chat.id, "Время ужина:")
+    bot.register_next_step_handler(message, process_dinner)
 
-def get_dinner(message):
-    user_form[message.chat.id]['dinner'] = message.text
-    bot.send_message(message.chat.id, "Введите время тренировки (или напишите 'Без тренировок'):")
-    bot.register_next_step_handler(message, finish_reg)
+def process_dinner(message):
+    user_steps[message.chat.id]['d'] = message.text
+    bot.send_message(message.chat.id, "Время тренировки (или 'Без тренировок'):")
+    bot.register_next_step_handler(message, process_finish)
 
-def finish_reg(message):
+def process_finish(message):
     cid = message.chat.id
-    user_form[cid]['train'] = message.text
+    u = user_steps[cid]
+    trial_end = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
     
-    # Расчет пробного периода (7 дней)
-    end_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-    
-    data = (
-        cid, user_form[cid]['goal'], user_form[cid]['age'], 
-        user_form[cid]['weight'], 0, 'M', 
-        user_form[cid]['breakfast'], user_form[cid]['lunch'], 
-        user_form[cid]['dinner'], user_form[cid]['train'], end_date
-    )
+    data = (cid, message.from_user.username, u['goal'], u['age'], u['weight'], 0, 
+            u['b'], u['l'], u['d'], message.text, trial_end)
     db.save_user(data)
     
-    bot.send_message(cid, 
-        "✅ Регистрация завершена!\n\n"
-        "Тебе предоставлена 1 бесплатная неделя. "
-        "Далее подписка составит 349 руб/мес.\n\n"
-        "Я начну присылать уведомления завтра. Не подведи меня.")
+    bot.send_message(cid, "🔥 Ты в системе! 7 дней бесплатно. Далее 349р/мес. Не пропадай.")
 
-# --- ОПЛАТА И ДОНАТ ---
+# --- ОПЛАТА ---
+@bot.message_handler(commands=['pay'])
+def pay(message):
+    bot.send_message(message.chat.id, 
+        f"Для оплаты 349р переведи по номеру `{PAY_PHONE}` (СБП) и пришли скрин чека сюда.", 
+        parse_mode="Markdown")
+    bot.register_next_step_handler(message, check_pay)
+
+def check_pay(message):
+    if not message.photo:
+        bot.send_message(message.chat.id, "Нужен скриншот.")
+        return
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("✅ Да", callback_data=f"ok_{message.chat.id}"),
+               types.InlineKeyboardButton("❌ Нет", callback_data=f"no_{message.chat.id}"))
+    bot.send_photo(ADMIN_ID, message.photo[-1].file_id, 
+                   caption=f"Чек от @{message.from_user.username}", reply_markup=markup)
+    bot.send_message(message.chat.id, "Чек на проверке.")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith(('ok_', 'no_')))
+def admin_res(call):
+    action, uid = call.data.split('_')
+    if action == 'ok':
+        db.update_subscription(uid, 30)
+        bot.send_message(uid, "✅ Подписка продлена на 30 дней!")
+    else:
+        bot.send_message(uid, "❌ Чек отклонен.")
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+
+# --- ДОНАТ ---
 @bot.message_handler(commands=['donate'])
 def donate(message):
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("50 руб", callback_data="pay_50"))
-    markup.add(types.InlineKeyboardButton("500 руб", callback_data="pay_500"))
-    bot.send_message(message.chat.id, "Твоя поддержка поможет мне стать умнее. Выбери сумму:", reply_markup=markup)
+    markup.add(types.InlineKeyboardButton("50р", callback_data="d_50"),
+               types.InlineKeyboardButton("200р", callback_data="d_200"))
+    bot.send_message(message.chat.id, "Поддержи создателя:", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('pay_'))
-def send_invoice(call):
-    amount = int(call.data.split('_')[1]) * 100 # В копейках
-    bot.send_invoice(
-        call.message.chat.id, 
-        title="Поддержка проекта",
-        description="Донат создателю системы",
-        invoice_payload="donate_payload",
-        provider_token=PAYMENT_TOKEN,
-        currency="RUB",
-        prices=[types.LabeledPrice("Донат", amount)]
-    )
+# --- СТАТИСТИКА В КОНЦЕ ДНЯ ---
+@bot.message_handler(commands=['stats'])
+def stats(message):
+    logs = db.get_daily_calories(message.chat.id)
+    total = sum([l[1] for l in logs])
+    report = "\n".join([f"{l[0]}: {l[1]} ккал" for l in logs])
+    bot.send_message(message.chat.id, f"Твой отчет сегодня:\n{report}\nВсего: {total} ккал.")
 
-# --- ПЛАНИРОВЩИК ---
-def send_reminders():
-    # Здесь логика: бот берет из БД время, сравнивает с текущим и шлет сообщения
-    # Реализуется через db.get_all_users()
-    pass
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(send_reminders, "interval", minutes=1)
-scheduler.start()
+# --- ПЛАНИРОВЩИК (Уведомления) ---
+def run_scheduler():
+    scheduler = BackgroundScheduler()
+    # Здесь должна быть логика проверки времени из БД
+    # В скелете мы просто запускаем поток
+    scheduler.start()
 
 if __name__ == '__main__':
-    threading.Thread(target=run_flask).start()
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))).start()
     bot.infinity_polling()
