@@ -15,92 +15,109 @@ PAY_PHONE = os.getenv("PAYMENT_PHONE")
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
-user_steps = {}
+user_data = {} # Временная память для регистрации
 
 @app.route('/')
 def health(): return "STEEL CORE ACTIVE", 200
 
-# --- ГЛАВНЫЕ КОМАНДЫ ---
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+def main_menu():
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("📊 Статистика", callback_data="stats"))
+    markup.add(types.InlineKeyboardButton("💳 Оплата", callback_data="pay"))
+    markup.add(types.InlineKeyboardButton("🛑 Выход", callback_data="stop"))
+    return markup
 
+# --- КОМАНДЫ ---
 @bot.message_handler(commands=['start'])
 def start(message):
     db.init_db()
-    bot.clear_step_handler_by_chat_id(message.chat.id) # Сброс зависших шагов
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("Начать путь 🚀", callback_data="start_reg"))
-    bot.send_message(message.chat.id, 
-        "Ваня, привет. Ты в системе **STEEL CORE**.\n\n"
-        "Либо ты строишь себя, либо мир ломает тебя. Выбор очевиден.", 
-        parse_mode="Markdown", reply_markup=markup)
+    bot.clear_step_handler_by_chat_id(message.chat.id)
+    user = db.get_user(message.chat.id)
+    
+    if user:
+        bot.send_message(message.chat.id, f"Ваня, ты снова в системе. Твой профиль активен.", reply_markup=main_menu())
+    else:
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("НАЧАТЬ ПУТЬ 🚀", callback_data="reg_start"))
+        bot.send_message(message.chat.id, "Добро пожаловать в **STEEL CORE**. Систему для тех, кто создает правила, а не следует им.", parse_mode="Markdown", reply_markup=markup)
 
 @bot.message_handler(commands=['stats'])
-def stats(message):
+def cmd_stats(message):
     logs = db.get_daily_calories(message.chat.id)
-    if not logs:
-        bot.send_message(message.chat.id, "Сегодня записей нет. Дисциплина хромает?")
-        return
-    total = sum([l[1] for l in logs])
-    bot.send_message(message.chat.id, f"📊 Отчет за сегодня: {total} ккал.")
+    total = sum([l[0] for l in logs]) if logs else 0
+    bot.send_message(message.chat.id, f"📊 Твой результат за сегодня: {total} ккал.")
 
 @bot.message_handler(commands=['pay'])
-def pay(message):
-    bot.send_message(message.chat.id, f"Для продления переведи 349р на `{PAY_PHONE}` и пришли скрин чека сюда.", parse_mode="Markdown")
-    bot.register_next_step_handler(message, handle_receipt)
+def cmd_pay(message):
+    bot.send_message(message.chat.id, f"Для активации переведи 349р на `{PAY_PHONE}` (СБП) и пришли фото чека.", parse_mode="Markdown")
 
 @bot.message_handler(commands=['stop'])
-def stop(message):
+def cmd_stop(message):
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("ДА, я сдаюсь", callback_data="confirm_stop"))
-    markup.add(types.InlineKeyboardButton("НЕТ, я кремень", callback_data="cancel_stop"))
-    bot.send_message(message.chat.id, "⚠️ Весь прогресс будет удален. Ты уверен?", reply_markup=markup)
+    markup.add(types.InlineKeyboardButton("Я СДАЮСЬ (СЛАБАК)", callback_data="quit_confirm"))
+    markup.add(types.InlineKeyboardButton("Я ОСТАЮСЬ (КРЕМЕНЬ)", callback_data="quit_cancel"))
+    bot.send_message(message.chat.id, "Ты действительно хочешь вернуться в толпу?", reply_markup=markup)
 
-# --- РЕГИСТРАЦИЯ ЧЕРЕЗ CALLBACK ---
-
+# --- ОБРАБОТКА КНОПОК ---
 @bot.callback_query_handler(func=lambda call: True)
-def handle_calls(call):
+def callback_listener(call):
     cid = call.message.chat.id
-    if call.data == "start_reg":
+
+    mid = call.message.message_id
+
+    if call.data == "reg_start":
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("Похудение", callback_data="goal_diet"))
         markup.add(types.InlineKeyboardButton("Масса", callback_data="goal_mass"))
-        bot.edit_message_text("Выбери цель:", cid, call.message.message_id, reply_markup=markup)
-    
+        bot.edit_message_text("Выбери свою цель:", cid, mid, reply_markup=markup)
+
     elif call.data.startswith("goal_"):
-
-        user_steps[cid] = {'goal': call.data}
-        bot.send_message(cid, "Введите возраст:")
+        user_data[cid] = {'goal': call.data.split('_')[1]}
+        bot.answer_callback_query(call.id)
+        bot.send_message(cid, "Твой возраст:")
         bot.register_next_step_handler(call.message, reg_age)
-    
-    elif call.data == "confirm_stop":
-        db.delete_user(cid)
-        bot.edit_message_text("Ты выбыл. Путь к посредственности открыт.", cid, call.message.message_id)
-    
-    elif call.data == "cancel_stop":
-        bot.edit_message_text("Правильный выбор. Возвращаемся в строй.", cid, call.message.message_id)
 
+    elif call.data == "stats":
+        bot.answer_callback_query(call.id)
+        cmd_stats(call.message)
+
+    elif call.data == "pay":
+        bot.answer_callback_query(call.id)
+        cmd_pay(call.message)
+
+    elif call.data == "stop":
+        bot.answer_callback_query(call.id)
+        cmd_stop(call.message)
+
+    elif call.data == "quit_confirm":
+        db.delete_user(cid)
+        bot.edit_message_text("Система стерла тебя. Ты снова никто.", cid, mid)
+        bot.answer_callback_query(call.id)
+
+    elif call.data == "quit_cancel":
+        bot.edit_message_text("Дисциплина восстановлена.", cid, mid, reply_markup=main_menu())
+        bot.answer_callback_query(call.id)
+
+# --- ЛОГИКА РЕГИСТРАЦИИ (ШАГИ) ---
 def reg_age(message):
-    user_steps[message.chat.id]['age'] = message.text
-    bot.send_message(message.chat.id, "Твой вес:")
+    user_data[message.chat.id]['age'] = message.text
+    bot.send_message(message.chat.id, "Твой текущий вес:")
     bot.register_next_step_handler(message, reg_weight)
 
 def reg_weight(message):
-    user_steps[message.chat.id]['weight'] = message.text
-    bot.send_message(message.chat.id, "Время завтрака (08:00):")
-    bot.register_next_step_handler(message, reg_finish)
-
-def reg_finish(message):
     cid = message.chat.id
-    u = user_steps[cid]
+    u = user_data[cid]
     trial = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-    data = (cid, message.from_user.username, u['goal'], u['age'], u['weight'], "0", "M", u['weight'], "13:00", "19:00", "Нет", trial)
-    db.save_user(data)
-    bot.send_message(cid, "✅ Система настроена. Завтра в бой.")
+    
+    db.save_user(cid, message.from_user.username, u['goal'], u['age'], message.text, trial)
+    bot.send_message(cid, "🔥 ТЫ В СИСТЕМЕ. Первая неделя — подарок. Твой путь начался.", reply_markup=main_menu())
 
-def handle_receipt(message):
-    if message.photo:
-        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"Чек от @{message.from_user.username}")
-        bot.send_message(message.chat.id, "Чек отправлен.")
-    else: bot.send_message(message.chat.id, "Нужно фото.")
+# --- ПРИЕМ ЧЕКОВ ---
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"Чек от @{message.from_user.username}")
+    bot.send_message(message.chat.id, "Чек передан администратору на проверку.")
 
 if __name__ == '__main__':
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))).start()
