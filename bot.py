@@ -12,6 +12,10 @@ bot = telebot.TeleBot(TOKEN)
 user_temp = {}
 
 
+@app.route('/')
+def health(): return "STEEL CORE ONLINE", 200
+
+
 # Вспомогательная функция проверки времени
 def check_gap(t1, t2):
     try:
@@ -219,5 +223,6 @@ def process_new_time(message, time_type):
 
 
 # Запуск бота
-if __name__ == "__main__":
-    bot.polling(none_stop=True)
+if __name__ == '__main__':
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))).start()
+    bot.infinity_polling()
