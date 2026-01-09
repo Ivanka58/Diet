@@ -148,7 +148,7 @@ def stop_cmd(message):
 
 @bot.message_handler(func=lambda m: m.text in ["ДА, я слабак", "НЕТ, я остаюсь"])
 def stop_confirm(message):
-    if "слабак" in message.text:
+    if "ДА, я слабак" in message.text:
         db.delete_user(message.chat.id)
         bot.send_message(message.chat.id, "Ты удален. Возвращайся в толпу.", reply_markup=types.ReplyKeyboardRemove())
     else:
