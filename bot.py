@@ -178,10 +178,10 @@ def reg_train(message):
         bot.send_message(cid, "⚠️ Неверный формат! Введи время как 19:00:")
         bot.register_next_step_handler(message, reg_train)
         return
-    user_temp[cid]['dinner'] = t
+    user_temp[message.chat.id]['dinner'] = message.text
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Без тренировок")
-    bot.send_message(cid, "Время тренировки:", reply_markup=markup)
+    bot.send_message(message.chat.id, "Время тренировки:", reply_markup=markup)
     bot.register_next_step_handler(message, reg_final)
 
 # Завершение регистрации
@@ -261,20 +261,25 @@ def receipt(message):
     bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"Чек от @{message.from_user.username}", reply_markup=markup)
     bot.send_message(message.chat.id, "Ваш чек отправлен на проверку администратору.")
 
+# Обработчик подтверждения платежа администратором
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_payment_"))
+def confirm_payment(call):
+    user_id = int(call.data.split("_")[2])
+    bot.send_message(user_id, "✅ Ваша оплата подтверждена! Доступ продлен на 30 дней.")
+    bot.answer_callback_query(call.id, "Оплата подтверждена!")
+    
+# Обработчик отмены платежа администратором
+@bot.callback_query_handler(func=lambda call: call.data.startswith("cancel_payment_"))
+def cancel_payment(call):
+    user_id = int(call.data.split("_")[2])
+    bot.send_message(user_id, "🔍 Ваш платёж отклонён, обратитесь к администратору @Ivanka58.")
+    bot.answer_callback_query(call.id, "Платеж отменён.")
+    
 # --- CALLBACKS ---
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_all(call):
     chat_id = call.message.chat.id
-    if call.data.startswith("confirm_payment_"):
-        uid = int(call.data.split("_")[2])
-        db.update_sub(uid, 30)
-        bot.send_message(uid, "✅ Оплата подтверждена! +30 дней доступа.")
-        bot.answer_callback_query(call.id, "Подтверждено")
-    elif call.data.startswith("cancel_payment_"):
-        uid = int(call.data.split("_")[2])
-        bot.send_message(uid, "❌ Платёж отклонён. Свяжитесь с @Ivanka58.")
-        bot.answer_callback_query(call.id, "Отменено")
     elif call.data.startswith("change"):
         new_time_type = call.data.replace("change_", "")
         bot.send_message(chat_id, f"Введите новое время для {new_time_type}:")
@@ -282,7 +287,9 @@ def callback_all(call):
     elif call.data == "i_ate":
         bot.send_message(chat_id, "Отправь список того, что ты съел:")
         bot.register_next_step_handler_by_chat_id(chat_id, lambda m: bot.send_message(chat_id, "Записано: 0 ккал."))
-
+    elif call.data.startswith("donation_"):
+        amount = call.data.replace("donation_", "")
+        bot.send_message(chat_id, f"Спасибо за поддержку! Переведи {amount} руб. на `{PAY_PHONE}`.", parse_mode="Markdown")
 def process_new_time(message, time_type):
     bot.send_message(message.chat.id, f"Новый интервал для '{time_type}' установлен на {message.text}.")
 
