@@ -38,7 +38,7 @@ def check_4h(t1, t2):
 # --- КОМАНДЫ ---
 
 @bot.message_handler(commands=['start'])
-def start(message):
+def start_cmd(message):
     db.init_db()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Начать свой путь 🚀")
@@ -109,7 +109,7 @@ def reg_final(message):
 # --- УПРАВЛЕНИЕ ---
 
 @bot.message_handler(commands=['menu'])
-def menu(message):
+def menu_cmd(message):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("Изменить завтрак", callback_data="change_b"),
                types.InlineKeyboardButton("Изменить обед", callback_data="change_l"),
@@ -122,12 +122,12 @@ def stats_cmd(message):
     bot.send_message(message.chat.id, "Эта команда станет доступна позже.")
     
 @bot.message_handler(commands=['pay'])
-def pay(message):
+def pay_cmd(message):
     user = db.get_user(message.chat.id)
     bot.send_message(message.chat.id, f"Доступ до: {user[11]}\n\nДля продления переведи 349р на `{PAY_PHONE}` и пришли скрин чека.")
 
 @bot.message_handler(commands=['stop'])
-def stop(message):
+def stop_cmd(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("ДА, я сдаюсь", "НЕТ, я кремень")
     bot.send_message(message.chat.id, "Вы уверены? Весь прогресс удалится.", reply_markup=markup)
