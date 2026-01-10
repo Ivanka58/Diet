@@ -37,79 +37,105 @@ def check_4h(t1, t2):
 
 # --- КОМАНДЫ ---
 
+# Команда /start
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Начать свой путь 🚀")
     bot.send_message(message.chat.id, 
-                     "Привет, Ваня. Ты в системе STEEL CORE.\n"
+                     "Привет. Ты в системе STEEL CORE.\n"
                      "Этот бот — твой инструмент для выхода из толпы. Нажми кнопку, чтобы начать регистрацию.",
                      parse_mode="Markdown", reply_markup=markup)
     
+# Начало регистрации
 @bot.message_handler(func=lambda m: m.text == "Начать свой путь 🚀")
-def reg_1(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("Похудение", "Поддержание формы", "Набор массы")
-    bot.send_message(message.chat.id, "В какой сфере ты хочешь двигаться?", reply_markup=markup)
-    bot.register_next_step_handler(message, reg_2)
 
-def reg_2(message):
+# Выбор цели
+def reg_start(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("Похудение", "Поддержание формы", "Набор мышечной массы", "Набор жировой массы")
+    bot.send_message(message.chat.id, "В какой сфере вы хотите двигаться?", reply_markup=markup)
+    bot.register_next_step_handler(message, reg_goal)
+
+# Регистрация возраста 
+def reg_goal(message):
     user_temp[message.chat.id] = {'goal': message.text}
     bot.send_message(message.chat.id, "Твой возраст:", reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(message, reg_3)
+    bot.register_next_step_handler(message, reg_age)
 
-def reg_3(message):
+# Регистрация текущего веса
+def reg_age(message):
     user_temp[message.chat.id]['age'] = message.text
-    bot.send_message(message.chat.id, "Твой вес (кг):")
-    bot.register_next_step_handler(message, reg_4)
+    bot.send_message(message.chat.id, "Твой текущий вес (кг):")
+    bot.register_next_step_handler(message, reg_weight)
 
-def reg_4(message):
+# Регистрация желаемого веса
+def reg_weight(message):
     user_temp[message.chat.id]['weight'] = message.text
     bot.send_message(message.chat.id, "Желаемый вес (кг):")
-    bot.register_next_step_handler(message, reg_5)
+    bot.register_next_step_handler(message, reg_target)
 
-def reg_5(message):
+# Регистрация пола 
+def reg_target(message):
     user_temp[message.chat.id]['target'] = message.text
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("Мужской", "Женский")
+    bot.send_message(message.chat.id, "Твой пол:", reply_markup=markup)
+    bot.register_next_step_handler(message, reg_sub_warn)
+
+# Предупреждение о подписке
+def reg_sub_warn(message):
+    user_temp[message.chat.id]['gender'] = message.text
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Я согласен, идем дальше")
-    bot.send_message(message.chat.id, "⚠️ Первая неделя бесплатно. Далее 349р/мес. Согласен?", reply_markup=markup)
-    bot.register_next_step_handler(message, reg_6)
+    bot.send_message(message.chat.id, 
+                     "⚠️ Первая неделя бесплатно. Далее — 349р/мес.\nАвтосписаний нет. Согласен?",
+                     reply_markup=markup)
+    bot.register_next_step_handler(message, reg_breakfast)
 
-def reg_6(message):
-    bot.send_message(message.chat.id, "Время ЗАВТРАКА (08:00):", reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(message, reg_7)
+# Время завтрака
+def reg_breakfast(message):
+    bot.send_message(message.chat.id, "Желаемое время завтрака (например, 08:00):",
+                     reply_markup=types.ReplyKeyboardRemove())
+    bot.register_next_step_handler(message, reg_lunch)
 
-def reg_7(message):
-    user_temp[message.chat.id]['b'] = message.text
-    bot.send_message(message.chat.id, "Время ОБЕДА (не менее 4ч разницы):")
-    bot.register_next_step_handler(message, reg_8)
+# Время обеда 
+def reg_lunch(message):
+    user_temp[message.chat.id]['breakfast'] = message.text
+    bot.send_message(message.chat.id, "Время обеда (не ранее 4 часов после завтрака):")
+    bot.register_next_step_handler(message, reg_dinner)
 
-def reg_8(message):
-    cid = message.chat.id
-    l_t = message.text
-    if not check_4h(user_temp[cid]['b'], l_t):
-        bot.send_message(cid, "⚠️ Между завтраком и обедом меньше 4 часов. Не рекомендуется!")
-    user_temp[cid]['l'] = l_t
-    bot.send_message(cid, "Время УЖИНА:")
-    bot.register_next_step_handler(message, reg_9)
+# Время ужина 
+def reg_dinner(message):
+    lunch_time = message.text
+    breakfast_time = user_temp[message.chat.id]['breakfast']
+    
+    if not check_gap(breakfast_time, lunch_time):
+        bot.send_message(message.chat.id, "⚠️ Время между завтраком и обедом меньше 4 часов. Не рекомендуется.")
+        
+    user_temp[message.chat.id]['lunch'] = lunch_time
+    bot.send_message(message.chat.id, "Время ужина:")
+    bot.register_next_step_handler(message, reg_train)
 
-def reg_9(message):
-    user_temp[message.chat.id]['d'] = message.text
+# Выбор времени тренировки
+def reg_train(message):
+    user_temp[message.chat.id]['dinner'] = message.text
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Без тренировок")
     bot.send_message(message.chat.id, "Время тренировки:", reply_markup=markup)
     bot.register_next_step_handler(message, reg_final)
 
+# Завершение регистрации
 def reg_final(message):
-    cid = message.chat.id
-    u = user_temp[cid]
-    sub = datetime.now() + timedelta(days=7)
-    data = (cid, message.from_user.username, u['goal'], u['age'], u['weight'], u['target'], 'M', u['b'], u['l'], u['d'], message.text, sub)
-    db.save_user(data)
-    bot.send_message(cid, "✅ Ты принят в диетический марафон! Путь начался.", reply_markup=types.ReplyKeyboardRemove())
+    train_time = message.text
+    user_temp[message.chat.id]['train'] = train_time
+    print(f"Пользователь завершил регистрацию: {user_temp}")
+    bot.send_message(message.chat.id, "✅ Ты принят в диетический марафон! Путь начался.",
+                     reply_markup=types.ReplyKeyboardRemove())
 
 # --- УПРАВЛЕНИЕ ---
 
+# Команда /menu
 @bot.message_handler(commands=['menu'])
 def menu_cmd(message):
     markup = types.InlineKeyboardMarkup()
@@ -120,21 +146,33 @@ def menu_cmd(message):
     )
     bot.send_message(message.chat.id, "Вы хотите изменить время приема пищи?", reply_markup=markup)
 
-
+# Команда /stats
 @bot.message_handler(commands=['stats'])
 def stats_cmd(message):
     # Пока мы игнорируем статистику, поскольку база данных отсутствует
     bot.send_message(message.chat.id, "Эта команда станет доступна позже.")
-    
+
+# Команда /pay
 @bot.message_handler(commands=['pay'])
 def pay_cmd(message):
     bot.send_message(message.chat.id, f"Твоя подписка активна до: (дата).\n\nДля продления перевода 349 рублей на `{PAY_PHONE}` (СПБ) и отправь фото чека.",
                     parse_mode="Markdown")
+    
+    # Команда "/donate"
+@bot.message_handler(commands=['donate'])
+def donate_cmd(message):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("100₽", callback_data="donation_100"),
+        types.InlineKeyboardButton("500₽", callback_data="donation_500")
+    )
+    bot.send_message(message.chat.id, "Поддержать проект:", reply_markup=markup)
 
+# Команда /stop
 @bot.message_handler(commands=['stop'])
 def stop_cmd(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("ДА, я сдаюсь", "НЕТ, продолжаю")
+    markup.add("ДА, я слабак", "НЕТ, я сильный")
     bot.send_message(message.chat.id, "Ты действительно хочешь выйти из марафона? Прогресс будет потерян!",
                      reply_markup=markup)
 
@@ -142,7 +180,7 @@ def stop_cmd(message):
 # Обработка выбора пользователя при выходе
 @bot.message_handler(func=lambda m: m.text in ["ДА, я слабак", "НЕТ, я сильный"])
 def stop_confirm(message):
-    if "ДА, я сдаюсь" in message.text:
+    if "ДА, я слабак" in message.text:
         # Здесь должна быть логика удаления пользователя из базы данных
         bot.send_message(message.chat.id, "Ты выбыл. Возвращайся в толпу. ", reply_markup=types.ReplyKeyboardRemove())
     else:
@@ -155,15 +193,26 @@ def receipt(message):
     bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"Чек от @{message.from_user.username}", reply_markup=markup)
     bot.send_message(message.chat.id, "Чек на проверке у администратора.")
 
+# Обработка callback запросов
 @bot.callback_query_handler(func=lambda call: True)
-def callbacks(call):
-    if call.data.startswith("admin_ok_"):
-        uid = int(call.data.split("_")[2])
-        db.update_sub(uid, 30)
-        bot.send_message(uid, "✅ Оплата подтверждена! Подписка +30 дней.")
-        bot.answer_callback_query(call.id, "Готово")
-    elif call.data.startswith("change_"):
-        bot.send_message(call.message.chat.id, "Введи новое время (например 09:30):")
+def callback_all(call):
+    chat_id = call.message.chat.id
+    if call.data.startswith("change"):
+        new_time_type = call.data.replace("change_", "")
+        bot.send_message(chat_id, f"Введите новое время для {new_time_type}:")
+        bot.register_next_step_handler_by_chat_id(chat_id, lambda m: process_new_time(m, new_time_type))
+    elif call.data.startswith("donation_"):
+        amount = call.data.replace("donation_", "")
+        bot.send_message(chat_id, f"Спасибо за поддержку! Переведи {amount} руб. на `{PAY_PHONE}`.", parse_mode="Markdown")
+    elif call.data.startswith("confirm_payment_"):
+        user_id = int(call.data.split("_")[2])
+        bot.send_message(user_id, "✅ Ваша оплата подтверждена! +30 дней.")
+        bot.answer_callback_query(call.id, "Операция успешно выполнена!")
+
+# Обработка нового времени приема пищи
+def process_new_time(message, time_type):
+    user_temp[message.chat.id][time_type] = message.text
+    bot.send_message(message.chat.id, f"Новый временной интервал для '{time_type}' установлен на {message.text}.")
 
 if __name__ == '__main__':
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))).start()
