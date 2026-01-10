@@ -117,11 +117,10 @@ def menu(message):
     bot.send_message(message.chat.id, "Перенести прием пищи?", reply_markup=markup)
 
 @bot.message_handler(commands=['stats'])
-def stats(message):
-    res = db.get_daily_stats(message.chat.id)
-    total = sum(r[1] for r in res)
-    bot.send_message(message.chat.id, f"📊 Калории за сегодня: {total} ккал.")
-
+def stats_cmd(message):
+    # Пока мы игнорируем статистику, поскольку база данных отсутствует
+    bot.send_message(message.chat.id, "Эта команда станет доступна позже.")
+    
 @bot.message_handler(commands=['pay'])
 def pay(message):
     user = db.get_user(message.chat.id)
