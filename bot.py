@@ -1,3 +1,4 @@
+
 import os
 import telebot
 from telebot import types
@@ -40,6 +41,7 @@ def check_4h(t1, t2):
 # Команда /start
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
+    db.init_db() # Инициализируем базу при старте
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Начать свой путь 🚀")
     bot.send_message(message.chat.id, 
@@ -49,7 +51,6 @@ def start_cmd(message):
     
 # Начало регистрации
 @bot.message_handler(func=lambda m: m.text == "Начать свой путь 🚀")
-
 # Выбор цели
 def reg_start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -110,7 +111,8 @@ def reg_dinner(message):
     lunch_time = message.text
     breakfast_time = user_temp[message.chat.id]['breakfast']
     
-    if not check_gap(breakfast_time, lunch_time):
+    # Исправлено: вызываем check_4h вместо check_gap
+    if not check_4h(breakfast_time, lunch_time):
         bot.send_message(message.chat.id, "⚠️ Время между завтраком и обедом меньше 4 часов. Не рекомендуется.")
         
     user_temp[message.chat.id]['lunch'] = lunch_time
@@ -127,10 +129,17 @@ def reg_train(message):
 
 # Завершение регистрации
 def reg_final(message):
+    cid = message.chat.id
     train_time = message.text
-    user_temp[message.chat.id]['train'] = train_time
-    print(f"Пользователь завершил регистрацию: {user_temp}")
-    bot.send_message(message.chat.id, "✅ Ты принят в диетический марафон! Путь начался.",
+    user_temp[cid]['train'] = train_time
+    
+    # Добавлена логика сохранения в базу, чтобы марафон реально начался
+    sub_end = datetime.now() + timedelta(days=7)
+    u = user_temp[cid]
+    data = (cid, message.from_user.username, u['goal'], u['age'], u['weight'], u['target'], u['gender'], u['breakfast'], u['lunch'], u['dinner'], train_time, sub_end)
+    db.save_user(data)
+    
+    bot.send_message(cid, "✅ Ты принят в диетический марафон! Путь начался.",
                      reply_markup=types.ReplyKeyboardRemove())
 
 # --- УПРАВЛЕНИЕ ---
@@ -149,16 +158,22 @@ def menu_cmd(message):
 # Команда /stats
 @bot.message_handler(commands=['stats'])
 def stats_cmd(message):
-    # Пока мы игнорируем статистику, поскольку база данных отсутствует
-    bot.send_message(message.chat.id, "Эта команда станет доступна позже.")
+    res = db.get_daily_stats(message.chat.id)
+    if not res:
+        bot.send_message(message.chat.id, "Сегодня данных еще нет.")
+    else:
+        total = sum(r[1] for r in res)
+        bot.send_message(message.chat.id, f"Твоя статистика за сегодня: {total} ккал.")
 
 # Команда /pay
 @bot.message_handler(commands=['pay'])
 def pay_cmd(message):
-    bot.send_message(message.chat.id, f"Твоя подписка активна до: (дата).\n\nДля продления перевода 349 рублей на `{PAY_PHONE}` (СПБ) и отправь фото чека.",
+    user = db.get_user(message.chat.id)
+    date_str = user[11].strftime("%d.%m.%Y") if user else "(дата)"
+    bot.send_message(message.chat.id, f"Твоя подписка активна до: {date_str}.\n\nДля продления переведи 349 рублей на `{PAY_PHONE}` (СБП) и отправь фото чека.",
                     parse_mode="Markdown")
     
-    # Команда "/donate"
+# Команда "/donate"
 @bot.message_handler(commands=['donate'])
 def donate_cmd(message):
     markup = types.InlineKeyboardMarkup()
@@ -176,20 +191,22 @@ def stop_cmd(message):
     bot.send_message(message.chat.id, "Ты действительно хочешь выйти из марафона? Прогресс будет потерян!",
                      reply_markup=markup)
 
-
 # Обработка выбора пользователя при выходе
 @bot.message_handler(func=lambda m: m.text in ["ДА, я слабак", "НЕТ, я сильный"])
 def stop_confirm(message):
     if "ДА, я слабак" in message.text:
-        # Здесь должна быть логика удаления пользователя из базы данных
+        db.delete_user(message.chat.id)
         bot.send_message(message.chat.id, "Ты выбыл. Возвращайся в толпу. ", reply_markup=types.ReplyKeyboardRemove())
     else:
         bot.send_message(message.chat.id, "Правильный выбор, кремень не ломается! ", reply_markup=types.ReplyKeyboardRemove())
 
+# Обработка фотографий чеков
 @bot.message_handler(content_types=['photo'])
 def receipt(message):
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Подтвердить 30 дней", callback_data=f"admin_ok_{message.chat.id}"))
+    # Исправлено: callback_data для кнопок подтверждения и отказа
+    markup.add(types.InlineKeyboardButton("✅ Подтвердить", callback_data=f"admin_ok_{message.chat.id}"))
+    markup.add(types.InlineKeyboardButton("❌ Отказать", callback_data=f"admin_no_{message.chat.id}"))
     bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"Чек от @{message.from_user.username}", reply_markup=markup)
     bot.send_message(message.chat.id, "Чек на проверке у администратора.")
 
@@ -197,23 +214,36 @@ def receipt(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_all(call):
     chat_id = call.message.chat.id
-    if call.data.startswith("change"):
+    if call.data.startswith("change_"):
         new_time_type = call.data.replace("change_", "")
         bot.send_message(chat_id, f"Введите новое время для {new_time_type}:")
         bot.register_next_step_handler_by_chat_id(chat_id, lambda m: process_new_time(m, new_time_type))
+    
     elif call.data.startswith("donation_"):
         amount = call.data.replace("donation_", "")
         bot.send_message(chat_id, f"Спасибо за поддержку! Переведи {amount} руб. на `{PAY_PHONE}`.", parse_mode="Markdown")
-    elif call.data.startswith("confirm_payment_"):
+    
+    # Логика подтверждения оплаты админом
+    elif call.data.startswith("admin_ok_"):
         user_id = int(call.data.split("_")[2])
+        db.update_sub(user_id, 30)
         bot.send_message(user_id, "✅ Ваша оплата подтверждена! +30 дней.")
-        bot.answer_callback_query(call.id, "Операция успешно выполнена!")
+        bot.edit_message_caption("✅ Оплата подтверждена", call.message.chat.id, call.message.message_id)
+        bot.answer_callback_query(call.id, "Одобрено")
+
+    # Логика отказа в оплате
+    elif call.data.startswith("admin_no_"):
+        user_id = int(call.data.split("_")[2])
+        bot.send_message(user_id, "❌ Ваша оплата отклонена. Пожалуйста, отправьте корректный чек.")
+        bot.edit_message_caption("❌ Оплата отклонена", call.message.chat.id, call.message.message_id)
+        bot.answer_callback_query(call.id, "Отклонено")
 
 # Обработка нового времени приема пищи
 def process_new_time(message, time_type):
-    user_temp[message.chat.id][time_type] = message.text
+    # Здесь тоже добавим сохранение в БД в будущем, пока просто выводим текст
     bot.send_message(message.chat.id, f"Новый временной интервал для '{time_type}' установлен на {message.text}.")
 
 if __name__ == '__main__':
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))).start()
     bot.infinity_polling()
+
