@@ -44,7 +44,6 @@ def check_4h(t1, t2):
 # Команда /start
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
-    db.init_db()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Начать свой путь 🚀")
     bot.send_message(message.chat.id, 
@@ -216,19 +215,13 @@ def menu_cmd(message):
 # Команда /stats
 @bot.message_handler(commands=['stats'])
 def stats_cmd(message):
-    res = db.get_daily_stats(message.chat.id)
-    if not res:
-        bot.send_message(message.chat.id, "За сегодня данных нет.")
-    else:
-        total = sum(r[1] for r in res)
-        bot.send_message(message.chat.id, f"📊 Твоя статистика: {total} ккал.")
+    # Пока мы игнорируем статистику, поскольку база данных отсутствует
+    bot.send_message(message.chat.id, "Эта команда станет доступна позже.")
 
 # Команда /pay
 @bot.message_handler(commands=['pay'])
 def pay_cmd(message):
-    user = db.get_user(message.chat.id)
-    date_str = user[11].strftime("%d.%m.%Y") if user else "(дата)"
-    bot.send_message(message.chat.id, f"Твоя подписка активна до: {date_str}.\n\nДля продления переведи 349 рублей на `{PAY_PHONE}` (СБП) и отправь фото чека.",
+    bot.send_message(message.chat.id, f"Твоя подписка активна до: (дата).\n\nДля продления перевода 349 рублей на `{PAY_PHONE}` (СПБ) и отправь фото чека.",
                     parse_mode="Markdown")
     
 # Команда "/donate"
@@ -249,15 +242,15 @@ def stop_cmd(message):
     bot.send_message(message.chat.id, "Ты действительно хочешь выйти из марафона? Прогресс будет потерян!",
                      reply_markup=markup)
 
-# Обработка выхода
+# Обработка выбора пользователя при выходе
 @bot.message_handler(func=lambda m: m.text in ["ДА, я слабак", "НЕТ, я сильный"])
 def stop_confirm(message):
     if "ДА, я слабак" in message.text:
-        db.delete_user(message.chat.id)
+        # Здесь должна быть логика удаления пользователя из базы данных
         bot.send_message(message.chat.id, "Ты выбыл. Возвращайся в толпу. ", reply_markup=types.ReplyKeyboardRemove())
     else:
         bot.send_message(message.chat.id, "Правильный выбор, кремень не ломается! ", reply_markup=types.ReplyKeyboardRemove())
-
+        
 @bot.message_handler(content_types=['photo'])
 def receipt(message):
     markup = types.InlineKeyboardMarkup()
