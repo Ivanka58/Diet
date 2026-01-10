@@ -129,16 +129,19 @@ def pay_cmd(message):
 @bot.message_handler(commands=['stop'])
 def stop_cmd(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("ДА, я сдаюсь", "НЕТ, я кремень")
-    bot.send_message(message.chat.id, "Вы уверены? Весь прогресс удалится.", reply_markup=markup)
+    markup.add("ДА, я сдаюсь", "НЕТ, продолжаю")
+    bot.send_message(message.chat.id, "Ты действительно хочешь выйти из марафона? Прогресс будет потерян!",
+                     reply_markup=markup)
 
-@bot.message_handler(func=lambda m: m.text in ["ДА, я сдаюсь", "НЕТ, я кремень"])
-def stop_conf(message):
-    if "ДА" in message.text:
-        db.delete_user(message.chat.id)
-        bot.send_message(message.chat.id, "Ты удален. Возвращайся в толпу.", reply_markup=types.ReplyKeyboardRemove())
+
+# Обработка выбора пользователя при выходе
+@bot.message_handler(func=lambda m: m.text in ["ДА, я сдаюсь", "НЕТ, продолжаю"])
+def stop_confirm(message):
+    if "ДА, я сдаюсь" in message.text:
+        # Здесь должна быть логика удаления пользователя из базы данных
+        bot.send_message(message.chat.id, "Ты покинул марафон. Успехов!", reply_markup=types.ReplyKeyboardRemove())
     else:
-        bot.send_message(message.chat.id, "Верный выбор.", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "Молодец! Продолжаем движение вперед.", reply_markup=types.ReplyKeyboardRemove())
 
 @bot.message_handler(content_types=['photo'])
 def receipt(message):
