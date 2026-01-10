@@ -127,12 +127,15 @@ def reg_dinner(message):
     lunch_time = message.text
     breakfast_time = user_temp[message.chat.id]['breakfast']
     
-    if not check_gap(breakfast_time, lunch_time):
-        bot.send_message(message.chat.id, "⚠️ Время между завтраком и обедом меньше 4 часов. Не рекомендуется.")
+    try:
+        if not check_4h(breakfast_time, lunch_time):
+            bot.send_message(message.chat.id, "⚠️ Время между завтраком и обедом меньше 4 часов. Не рекомендуется.")
         
-    user_temp[message.chat.id]['lunch'] = lunch_time
-    bot.send_message(message.chat.id, "Время ужина:")
-    bot.register_next_step_handler(message, reg_train)
+        user_temp[message.chat.id]['lunch'] = lunch_time
+        bot.send_message(message.chat.id, "Время ужина:")
+        bot.register_next_step_handler(message, reg_train)
+    except ValueError:
+        bot.send_message(message.chat.id, "Некорректный формат времени. Повторите попытку.")
 
 
 # Выбор времени тренировки
@@ -216,9 +219,16 @@ def stop_confirm(message):
 @bot.message_handler(content_types=['photo'])
 def receipt(message):
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Подтвердить 30 дней", callback_data=f"admin_ok_{message.chat.id}"))
+    markup.add(types.InlineKeyboardButton("✅ Подтвердить платеж", callback_data=f"confirm_payment_{message.chat.id}"))
     bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"Чек от @{message.from_user.username}", reply_markup=markup)
-    bot.send_message(message.chat.id, "Чек на проверке у администратора.")
+    bot.send_message(message.chat.id, "Ваш чек отправлен на проверку администратору.")
+
+# Обработчик подтверждения платежа администратором
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_payment_"))
+def confirm_payment(call):
+    user_id = int(call.data.split("_")[2])
+    bot.send_message(user_id, "✅ Ваша оплата подтверждена! Доступ продлен на 30 дней.")
+    bot.answer_callback_query(call.id, "Оплата подтверждена!")
 
 
 # Обработка callback запросов
@@ -232,10 +242,6 @@ def callback_all(call):
     elif call.data.startswith("donation_"):
         amount = call.data.replace("donation_", "")
         bot.send_message(chat_id, f"Спасибо за поддержку! Переведи {amount} руб. на `{PAY_PHONE}`.", parse_mode="Markdown")
-    elif call.data.startswith("confirm_payment_"):
-        user_id = int(call.data.split("_")[2])
-        bot.send_message(user_id, "✅ Ваша оплата подтверждена! +30 дней.")
-        bot.answer_callback_query(call.id, "Операция успешно выполнена!")
 
 
 # Обработка нового времени приема пищи
