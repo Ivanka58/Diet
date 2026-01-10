@@ -14,9 +14,9 @@ def init_db():
         chat_id BIGINT PRIMARY KEY,
         username TEXT,
         goal TEXT,
-        age INTEGER,
-        weight REAL,
-        target_weight REAL,
+        age TEXT,
+        weight TEXT,
+        target_weight TEXT,
         gender TEXT,
         breakfast_time TEXT,
         lunch_time TEXT,
@@ -43,12 +43,13 @@ def save_user(data):
     cursor.execute('''INSERT INTO users 
         (chat_id, username, goal, age, weight, target_weight, gender, breakfast_time, lunch_time, dinner_time, train_time, subscription_end) 
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (chat_id) DO UPDATE SET is_active = 1, subscription_end = EXCLUDED.subscription_end''', data)
+        ON CONFLICT (chat_id) DO UPDATE SET is_active = 1, subscription_end = EXCLUDED.subscription_end, 
+        breakfast_time=EXCLUDED.breakfast_time, lunch_time=EXCLUDED.lunch_time, dinner_time=EXCLUDED.dinner_time''', data)
     conn.commit()
     cursor.close()
     conn.close()
 
-def update_subscription(chat_id, days):
+def update_sub(chat_id, days):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET subscription_end = subscription_end + interval %s WHERE chat_id = %s', 
@@ -78,11 +79,11 @@ def log_food(chat_id, calories, meal_type, desc):
 def get_daily_stats(chat_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT meal_type, calories, food_desc FROM food_logs WHERE chat_id = %s AND date = CURRENT_DATE', (chat_id,))
-    rows = cursor.fetchall()
+    cursor.execute('SELECT meal_type, calories FROM food_logs WHERE chat_id = %s AND date = CURRENT_DATE', (chat_id,))
+    res = cursor.fetchall()
     cursor.close()
     conn.close()
-    return rows
+    return res
 
 def delete_user(chat_id):
     conn = get_connection()
