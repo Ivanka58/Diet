@@ -14,9 +14,9 @@ def init_db():
         chat_id BIGINT PRIMARY KEY,
         username TEXT,
         goal TEXT,
-        age TEXT,
-        weight TEXT,
-        target_weight TEXT,
+        age INTEGER,
+        weight REAL,
+        target_weight REAL,
         gender TEXT,
         breakfast_time TEXT,
         lunch_time TEXT,
@@ -43,17 +43,14 @@ def save_user(data):
     cursor.execute('''INSERT INTO users 
         (chat_id, username, goal, age, weight, target_weight, gender, breakfast_time, lunch_time, dinner_time, train_time, subscription_end) 
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (chat_id) DO UPDATE SET is_active = 1, subscription_end = EXCLUDED.subscription_end, 
-        breakfast_time=EXCLUDED.breakfast_time, lunch_time=EXCLUDED.lunch_time, dinner_time=EXCLUDED.dinner_time''', data)
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-def update_sub(chat_id, days):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('UPDATE users SET subscription_end = subscription_end + interval %s WHERE chat_id = %s', 
-                   (f'{days} days', chat_id))
+        ON CONFLICT (chat_id) DO UPDATE SET 
+        is_active = 1, 
+        goal=EXCLUDED.goal, 
+        subscription_end=EXCLUDED.subscription_end,
+        breakfast_time=EXCLUDED.breakfast_time,
+        lunch_time=EXCLUDED.lunch_time,
+        dinner_time=EXCLUDED.dinner_time,
+        train_time=EXCLUDED.train_time''', data)
     conn.commit()
     cursor.close()
     conn.close()
@@ -67,11 +64,28 @@ def get_user(chat_id):
     conn.close()
     return user
 
+def get_active_reminders():
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Берем данные только активных пользователей
+    cursor.execute('SELECT chat_id, breakfast_time, lunch_time, dinner_time, train_time, username FROM users WHERE is_active = 1')
+    users = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return users
+
+def update_sub(chat_id, days):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET subscription_end = subscription_end + interval %s WHERE chat_id = %s', (f'{days} days', chat_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 def log_food(chat_id, calories, meal_type, desc):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO food_logs (chat_id, calories, meal_type, food_desc) VALUES (%s, %s, %s, %s)', 
-                   (chat_id, calories, meal_type, desc))
+    cursor.execute('INSERT INTO food_logs (chat_id, calories, meal_type, food_desc) VALUES (%s, %s, %s, %s)', (chat_id, calories, meal_type, desc))
     conn.commit()
     cursor.close()
     conn.close()
