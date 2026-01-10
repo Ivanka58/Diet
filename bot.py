@@ -219,7 +219,10 @@ def stop_confirm(message):
 @bot.message_handler(content_types=['photo'])
 def receipt(message):
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Подтвердить платеж", callback_data=f"confirm_payment_{message.chat.id}"))
+    markup.add(
+        types.InlineKeyboardButton("✅ Подтвердить платеж", callback_data=f"confirm_payment_{message.chat.id}"),
+        types.InlineKeyboardButton("❌ Отменить платеж", callback_data=f"cancel_payment_{message.chat.id}")
+    )
     bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"Чек от @{message.from_user.username}", reply_markup=markup)
     bot.send_message(message.chat.id, "Ваш чек отправлен на проверку администратору.")
 
@@ -230,6 +233,12 @@ def confirm_payment(call):
     bot.send_message(user_id, "✅ Ваша оплата подтверждена! Доступ продлен на 30 дней.")
     bot.answer_callback_query(call.id, "Оплата подтверждена!")
 
+# Обработчик отмены платежа администратором
+@bot.callback_query_handler(func=lambda call: call.data.startswith("cancel_payment_"))
+def cancel_payment(call):
+    user_id = int(call.data.split("_")[2])
+    bot.send_message(user_id, "🔍 Ваш платёж отклонён администратором.")
+    bot.answer_callback_query(call.id, "Платеж отменён.")
 
 # Обработка callback запросов
 @bot.callback_query_handler(func=lambda call: True)
