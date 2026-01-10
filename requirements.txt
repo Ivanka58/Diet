@@ -3,4 +3,5 @@ psycopg2-binary
 flask
 python-dotenv
 pytz
+gigachat
 gunicorn
