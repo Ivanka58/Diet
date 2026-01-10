@@ -39,11 +39,13 @@ def check_4h(t1, t2):
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
-    db.init_db()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Начать свой путь 🚀")
-    bot.send_message(message.chat.id, "Привет, Ваня. Ты в системе STEEL CORE. Нажми кнопку, чтобы запустить процесс.", reply_markup=markup)
-
+    bot.send_message(message.chat.id, 
+                     "Привет, Ваня. Ты в системе STEEL CORE.\n"
+                     "Этот бот — твой инструмент для выхода из толпы. Нажми кнопку, чтобы начать регистрацию.",
+                     parse_mode="Markdown", reply_markup=markup)
+    
 @bot.message_handler(func=lambda m: m.text == "Начать свой путь 🚀")
 def reg_1(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -111,10 +113,13 @@ def reg_final(message):
 @bot.message_handler(commands=['menu'])
 def menu_cmd(message):
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("Изменить завтрак", callback_data="change_b"),
-               types.InlineKeyboardButton("Изменить обед", callback_data="change_l"),
-               types.InlineKeyboardButton("Изменить ужин", callback_data="change_d"))
-    bot.send_message(message.chat.id, "Перенести прием пищи?", reply_markup=markup)
+    markup.add(
+        types.InlineKeyboardButton("Изменить Завтрак", callback_data="change_breakfast"),
+        types.InlineKeyboardButton("Изменить Обед", callback_data="change_lunch"),
+        types.InlineKeyboardButton("Изменить Ужин", callback_data="change_dinner")
+    )
+    bot.send_message(message.chat.id, "Вы хотите изменить время приема пищи?", reply_markup=markup)
+
 
 @bot.message_handler(commands=['stats'])
 def stats_cmd(message):
@@ -123,8 +128,8 @@ def stats_cmd(message):
     
 @bot.message_handler(commands=['pay'])
 def pay_cmd(message):
-    user = db.get_user(message.chat.id)
-    bot.send_message(message.chat.id, f"Доступ до: {user[11]}\n\nДля продления переведи 349р на `{PAY_PHONE}` и пришли скрин чека.")
+    bot.send_message(message.chat.id, f"Твоя подписка активна до: (дата).\n\nДля продления перевода 349 рублей на `{PAY_PHONE}` (СПБ) и отправь фото чека.",
+                    parse_mode="Markdown")
 
 @bot.message_handler(commands=['stop'])
 def stop_cmd(message):
@@ -135,13 +140,13 @@ def stop_cmd(message):
 
 
 # Обработка выбора пользователя при выходе
-@bot.message_handler(func=lambda m: m.text in ["ДА, я сдаюсь", "НЕТ, продолжаю"])
+@bot.message_handler(func=lambda m: m.text in ["ДА, я слабак", "НЕТ, я сильный"])
 def stop_confirm(message):
     if "ДА, я сдаюсь" in message.text:
         # Здесь должна быть логика удаления пользователя из базы данных
-        bot.send_message(message.chat.id, "Ты покинул марафон. Успехов!", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "Ты выбыл. Возвращайся в толпу. ", reply_markup=types.ReplyKeyboardRemove())
     else:
-        bot.send_message(message.chat.id, "Молодец! Продолжаем движение вперед.", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "Правильный выбор, кремень не ломается! ", reply_markup=types.ReplyKeyboardRemove())
 
 @bot.message_handler(content_types=['photo'])
 def receipt(message):
