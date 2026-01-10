@@ -103,6 +103,7 @@ def reg_breakfast(message):
 def reg_lunch(message):
     user_temp[message.chat.id]['breakfast'] = message.text
     bot.send_message(message.chat.id, "Время обеда (не ранее 4 часов после завтрака):")
+                      reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, reg_dinner)
 
 # Время ужина 
@@ -115,6 +116,7 @@ def reg_dinner(message):
         
     user_temp[message.chat.id]['lunch'] = lunch_time
     bot.send_message(message.chat.id, "Время ужина:")
+                reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, reg_train)
 
 # Выбор времени тренировки
