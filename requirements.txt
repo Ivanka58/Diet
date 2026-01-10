@@ -1,5 +1,6 @@
 pyTelegramBotAPI
-python-dotenv
-apscheduler
-flask
 psycopg2-binary
+flask
+python-dotenv
+pytz
+gunicorn
