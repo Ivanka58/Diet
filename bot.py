@@ -280,7 +280,7 @@ def cancel_payment(call):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_all(call):
     chat_id = call.message.chat.id
-    elif call.data.startswith("change"):
+    if call.data.startswith("change"):
         new_time_type = call.data.replace("change_", "")
         bot.send_message(chat_id, f"Введите новое время для {new_time_type}:")
         bot.register_next_step_handler_by_chat_id(chat_id, lambda m: process_new_time(m, new_time_type))
