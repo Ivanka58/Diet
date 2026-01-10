@@ -237,7 +237,7 @@ def confirm_payment(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cancel_payment_"))
 def cancel_payment(call):
     user_id = int(call.data.split("_")[2])
-    bot.send_message(user_id, "🔍 Ваш платёж отклонён администратором.")
+    bot.send_message(user_id, "🔍 Ваш платёж отклонён, обратитесь к администратору @Ivanka58.")
     bot.answer_callback_query(call.id, "Платеж отменён.")
 
 # Обработка callback запросов
