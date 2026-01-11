@@ -183,33 +183,57 @@ def reg_dinner(message):
     bot.send_message(cid, "Время ужина:")
     bot.register_next_step_handler(message, reg_train)
 
+
 # Выбор времени тренировки
 def reg_train(message):
     cid = message.chat.id
-    if not validate_time(message.text):
-        bot.send_message(cid, "Ошибка формата. Введи время ужина:")
-        bot.register_next_step_handler(message, reg_train)
-        return
+    # Сохраняем время ужина, которое пришло с прошлого шага
     user_temp[cid]['dinner'] = message.text
+    
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("Без тренировок")
-    bot.send_message(cid, "Время тренировки или напиши 'Без тренировок':", reply_markup=markup)
+    bot.send_message(cid, "Введи время тренировки (например, 18:00) или нажми кнопку:", reply_markup=markup)
+    # ПЕРЕХОДИМ К ФИНАЛУ
     bot.register_next_step_handler(message, reg_final)
-    
+
 # Завершение регистрации
 def reg_final(message):
     cid = message.chat.id
-    user_temp[cid]['train'] = message.text
+    train_time = message.text
+    user_temp[cid]['train'] = train_time
     
-    # Сохранение в базу, чтобы работали напоминания
-    u = user_temp[cid]
-    sub_end = datetime.now() + timedelta(days=7)
-    data = (cid, message.from_user.username, u['goal'], str(u['age']), str(u['weight']), 
-            str(u['target']), u['gender'], u['breakfast'], u['lunch'], u['dinner'], u['train'], sub_end)
-    db.save_user(data)
-    
-    bot.send_message(cid, "✅ Регистрация завершена! Твой путь начался.", reply_markup=types.ReplyKeyboardRemove())
-
+    try:
+        u = user_temp[cid]
+        # Важно: время подписки
+        sub_end = datetime.now() + timedelta(days=7)
+        
+        # Собираем данные. ПРОВЕРЬ, ЧТОБЫ В database.py save_user ПРИНИМАЛ ИМЕННО СТОЛЬКО АРГУМЕНТОВ
+        data = (
+            cid, 
+            message.from_user.username or "User", 
+            u.get('goal', 'Не указано'), 
+            u.get('age', 0), 
+            u.get('weight', 0), 
+            u.get('target', 0), 
+            u.get('gender', 'Не указан'), 
+            u.get('breakfast', '08:00'), 
+            u.get('lunch', '13:00'), 
+            u.get('dinner', '19:00'), 
+            train_time, 
+            sub_end
+        )
+        
+        db.save_user(data) # Пытаемся сохранить
+        
+        bot.send_message(cid, "✅ Твой путь в STEEL CORE начался! Данные сохранены.",
+                         reply_markup=types.ReplyKeyboardRemove())
+        print(f"Пользователь {cid} успешно зарегистрирован.")
+        
+    except Exception as e:
+        # Если будет ошибка в базе - бот напишет её в консоль и тебе в чат
+        print(f"ОШИБКА ПРИ СОХРАНЕНИИ: {e}")
+        bot.send_message(cid, f"❌ Ошибка при сохранении данных: {e}. Обратись к админу.")
+        
 # --- УПРАВЛЕНИЕ ---
 
 # Команда /menu
