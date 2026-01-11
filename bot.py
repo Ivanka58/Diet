@@ -365,9 +365,9 @@ def callback_all(call):
         bot.send_message(chat_id, f"Введите новое время для {new_time_type}:")
         bot.register_next_step_handler_by_chat_id(chat_id, lambda m: process_new_time(m, new_time_type))
     elif call.data == "i_ate":
-    bot.send_message(chat_id, "Отправь список того, что ты съел (например: 2 вареных яйца и стакан молока):")
+        bot.send_message(chat_id, "Отправь список того, что ты съел (например: 2 вареных яйца и стакан молока):")
     # Теперь мы регистрируем переход к функции process_meal_step
-    bot.register_next_step_handler_by_chat_id(chat_id, process_meal_step)
+        bot.register_next_step_handler_by_chat_id(chat_id, process_meal_step)
     elif call.data.startswith("donation_"):
         amount = call.data.replace("donation_", "")
         bot.send_message(chat_id, f"Спасибо за поддержку! Переведи {amount} руб. на `{PAY_PHONE}`.", parse_mode="Markdown")
