@@ -353,6 +353,8 @@ def reminder_thread():
             print(f"Ошибка планировщика: {e}")
             time.sleep(60)
 
+db.init_db() # Принудительное создание таблиц при запуске бота
+
 if __name__ == '__main__':
     threading.Thread(target=reminder_thread, daemon=True).start()
     threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))).start()
