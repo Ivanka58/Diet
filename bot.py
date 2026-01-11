@@ -34,16 +34,20 @@ def validate_time(text):
 
 # НАСТОЯЩИЙ ИИ GIGACHAT
 def ai_calories(text):
+    # Берем ключ из .env
+    giga_key = os.getenv("GIGACHAT_CREDENTIALS")
     try:
-        with GigaChat(credentials=GIGA_CREDS, verify_ssl_certs=False) as giga:
-            prompt = f"Ты диетолог STEEL CORE. Посчитай калории в этом блюде: '{text}'. Выдай ТОЛЬКО ОДНО ЧИСЛО. Если не понимаешь, выдай 300."
+        with GigaChat(credentials=giga_key, verify_ssl_certs=False) as giga:
+            # Просим ИИ выдать только цифру
+            prompt = f"Сколько калорий в этом приеме пищи: '{text}'? Напиши ТОЛЬКО ЦИФРУ. Если не знаешь, напиши 300."
             response = giga.chat(prompt)
-            # Извлекаем только цифры из ответа
+            # Убираем всё лишнее, оставляем только цифры
             result = ''.join(filter(str.isdigit, response.choices[0].message.content))
             return int(result) if result else 300
     except Exception as e:
-        print(f"Ошибка GigaChat: {e}")
-        return 0
+        print(f"Ошибка ИИ: {e}")
+        return 300 # Если ИИ упал, запишем среднее
+
 
 def check_4h(t1, t2):
     try:
@@ -280,11 +284,15 @@ def stop_cmd(message):
 # Обработка выбора пользователя при выходе
 @bot.message_handler(func=lambda m: m.text in ["ДА, я слабак", "НЕТ, я сильный"])
 def stop_confirm(message):
-    if "ДА, я слабак" in message.text:
-        # Здесь должна быть логика удаления пользователя из базы данных
-        bot.send_message(message.chat.id, "Ты выбыл. Возвращайся в толпу. ", reply_markup=types.ReplyKeyboardRemove())
+    cid = message.chat.id
+    if "ДА" in message.text:
+        db.delete_user(cid) # ВЫЗЫВАЕМ УДАЛЕНИЕ ИЗ database.py
+        bot.send_message(cid, "Твои данные удалены. Ты вернулся в толпу.", 
+                         reply_markup=types.ReplyKeyboardRemove())
     else:
-        bot.send_message(message.chat.id, "Правильный выбор, кремень не ломается! ", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(cid, "Правильный выбор! Кремень не ломается. Продолжаем путь!", 
+                         reply_markup=types.ReplyKeyboardRemove())
+
         
 @bot.message_handler(content_types=['photo'])
 def receipt(message):
@@ -309,6 +317,43 @@ def cancel_payment(call):
     user_id = int(call.data.split("_")[2])
     bot.send_message(user_id, "🔍 Ваш платёж отклонён, обратитесь к администратору @Ivanka58.")
     bot.answer_callback_query(call.id, "Платеж отменён.")
+
+# Составление меню
+def get_ai_menu(chat_id, meal_type):
+    user = db.get_user(chat_id) # Получаем данные юзера из базы
+    if not user: return "Овсянка на воде"
+    
+    # Распаковываем данные (порядок как в твоей таблице)
+    _, _, goal, age, weight, target, gender, _, _, _, _, _, _ = user
+    
+    giga_key = os.getenv("GIGACHAT_CREDENTIALS")
+    try:
+        with GigaChat(credentials=giga_key, verify_ssl_certs=False) as giga:
+            prompt = (f"Ты диетолог STEEL CORE. Составь меню на {meal_type} для пользователя: "
+                      f"Пол: {gender}, Возраст: {age}, Вес: {weight}кг, Цель: {goal} до {target}кг. "
+                      f"Напиши ТОЛЬКО список продуктов и блюд, кратко, без лишних слов.")
+            response = giga.chat(prompt)
+            return response.choices[0].message.content
+    except:
+        return "Куриная грудка и гречка (ошибка ИИ)"
+
+
+def process_meal_step(message):
+    chat_id = message.chat.id
+    food_description = message.text # Это то, что написал юзер (например, "3 яйца")
+    
+    bot.send_message(chat_id, "🔄 ИИ анализирует состав блюда...")
+    
+    # 1. Вызываем GigaChat (функцию ai_calories, которую мы добавили раньше)
+    calories = ai_calories(food_description)
+    
+    # 2. Записываем в базу данных
+    # Параметры: chat_id, калории, тип приема пищи, описание еды
+    db.log_food(chat_id, calories, "Обычный прием", food_description)
+    
+    # 3. Отвечаем пользователю
+    bot.send_message(chat_id, f"✅ Записано! По моим подсчетам это примерно {calories} ккал.\nТвой прогресс сохранен в базе.")
+
     
 # --- CALLBACKS ---
 
@@ -320,8 +365,9 @@ def callback_all(call):
         bot.send_message(chat_id, f"Введите новое время для {new_time_type}:")
         bot.register_next_step_handler_by_chat_id(chat_id, lambda m: process_new_time(m, new_time_type))
     elif call.data == "i_ate":
-        bot.send_message(chat_id, "Отправь список того, что ты съел:")
-        bot.register_next_step_handler_by_chat_id(chat_id, lambda m: bot.send_message(chat_id, "Записано: 0 ккал."))
+    bot.send_message(chat_id, "Отправь список того, что ты съел (например: 2 вареных яйца и стакан молока):")
+    # Теперь мы регистрируем переход к функции process_meal_step
+    bot.register_next_step_handler_by_chat_id(chat_id, process_meal_step)
     elif call.data.startswith("donation_"):
         amount = call.data.replace("donation_", "")
         bot.send_message(chat_id, f"Спасибо за поддержку! Переведи {amount} руб. на `{PAY_PHONE}`.", parse_mode="Markdown")
@@ -341,7 +387,8 @@ def reminder_thread():
                 cid, b, l, d, train, name = u
                 # За час до еды
                 if b == hour_later or l == hour_later or d == hour_later:
-                    bot.send_message(cid, f"🔔 {name or 'Друг'}, через час прием пищи! Твое меню: [Заглушка]")
+                    menu = get_ai_menu(cid, "завтрак") # или обед/ужин
+                    bot.send_message(cid, f"🔔 {name}, через час прием пищи!\n\n🥗 РЕКОМЕНДОВАННОЕ МЕНЮ:\n{menu}")
                 # Время еды
                 if b == now or l == now or d == now:
                     markup = types.InlineKeyboardMarkup()
